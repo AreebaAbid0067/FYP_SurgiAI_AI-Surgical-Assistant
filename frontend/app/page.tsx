@@ -1,9 +1,10 @@
-import VoiceInput from "./components/voice-input";
+import PreSurgeryWorkspace from "./components/pre-surgery-workspace";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <VoiceInput />
+    <main className="min-h-screen">
+      <PreSurgeryWorkspace />
     </main>
   );
 }
+
