@@ -1,8 +1,18 @@
+
 import Link from "next/link";
 
 const modules = [
   { key: "pre-surgery", label: "Pre-surgery", href: "/" },
-  { key: "during-surgery", label: "During surgery", href: "/during-surgery" },
+  {
+    key: "during-surgery",
+    label: "During surgery",
+    href: "/during-surgery",
+  },
+  {
+    key: "post-surgery",
+    label: "Post-surgery",
+    href: "/post-surgery",
+  },
 ] as const;
 
 type SiteHeaderProps = {
@@ -20,7 +30,10 @@ export default function SiteHeader({ active }: SiteHeaderProps) {
           <span className="font-semibold tracking-wide">SurgiAI</span>
         </Link>
 
-        <nav aria-label="Modules" className="flex items-center gap-1 text-sm">
+        <nav
+          aria-label="Modules"
+          className="flex flex-wrap items-center gap-1 text-sm"
+        >
           {modules.map((module) => (
             <Link
               key={module.key}

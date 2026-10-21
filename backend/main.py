@@ -11,6 +11,7 @@ from analyzers.prescription_analyzer import prescription_analyzer
 from analyzers.lab_reports_analyzer import lab_reports_analyzer
 from analyzers.scans_analyzer import scans_analyzer
 
+from agents.post_surgery_agent import post_surgery_agent
 from agents.surgery_agent.surgery_agent import surgical_agent
 from agents.pre_surgery_agent.surgical_procedure_agent import pre_surgical_report_agent
 
@@ -19,6 +20,13 @@ from helper_functions.to_markdown import to_markdown
 class DuringSurgery(BaseModel):
     surgeon_query: str
     patient_history: str
+
+class PostSurgery(BaseModel):
+    procedure: str
+    surgery_date: str
+    patient_history: str
+    symptoms: str = ""
+    question: str = ""
 
 app: FastAPI = FastAPI()
 
@@ -53,6 +61,50 @@ async def surgical_query(input: DuringSurgery):
     }
     response = surgical_agent(state)
     return response
+
+@app.post("/post-surgery")
+async def postoperative_query(input: PostSurgery):
+    try:
+        answer = post_surgery_agent(
+            procedure=input.procedure,
+            surgery_date=input.surgery_date,
+            patient_history=input.patient_history,
+            symptoms=input.symptoms,
+            question=input.question,
+        )
+
+        return {
+            "status": "success",
+            "answer": answer,
+            "notice": (
+                "Educational prototype only. "
+                "Not a substitute for assessment by a qualified clinician."
+            ),
+        }
+
+    except AuthenticationError:
+        return JSONResponse(
+            content={
+                "status": "error",
+                "message": (
+                    "Groq rejected the API key. Check GROQ_API_KEY "
+                    "in backend/.env without sharing the key."
+                ),
+            },
+            status_code=503,
+        )
+
+    except Exception:
+        return JSONResponse(
+            content={
+                "status": "error",
+                "message": (
+                    "The postoperative assistant could not process "
+                    "this request. Check the backend terminal for details."
+                ),
+            },
+            status_code=500,
+        )
 
 @app.post("/pre-surgery/upload")
 async def upload_files(
