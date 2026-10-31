@@ -1,51 +1,86 @@
-import os
-from dotenv import load_dotenv
 
+import os
+
+from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.messages import BaseMessage
 
+from agents.surgery_agent.tools.query_database import (
+    NO_EVIDENCE,
+    retrieve_passages,
+)
 from state import State
 
 load_dotenv()
 
 model = ChatGroq(
-    model="qwen/qwen3.8-27b",
-    temperature=0.5,
-    max_tokens=768,
-    api_key=os.getenv("GROQ_API_KEY")
+    model="openai/gpt-oss-20b",
+    temperature=0,
+    api_key=os.getenv("GROQ_API_KEY"),
 )
 
+
 def response_generation_node(state: State):
-  """LangGraph node that generates final response to surgeon query"""
+    """Generate an answer only when relevant surgical evidence is available."""
 
-  print("Response Generation")
-  surgeon_query = state['surgeon_query']
-  insights = state['insight_accumulator_response']
-  instructions = """ 
-          Based on insights generated, {insights}, and surgeon query, give a response
-          to surgeon query {surgeon_query}
+    print("Response Generation")
 
-          Respond directly to the surgeon's question, as if you were speaking directly to them.
-          Do not include explanations or justifications for how you reached your response.
-          The response should be a single short paragraph containing. The response must be
-          less than 2 sentences and 50 words
+    surgeon_query = state["surgeon_query"]
 
+    # Recheck the original question so an unrelated query cannot receive
+    # an answer based only on general LLM knowledge.
+    passages, _ = retrieve_passages(surgeon_query)
 
-          **Example:**
+    if not passages or all(
+        p["score"] < 0.30 for p in passages
+    ):
+        answer = (
+            "I couldn't find sufficiently relevant evidence in SurgiAI's "
+            "knowledge base to answer this question reliably. "
+            "Please ask a question related to surgical care."
+        )
+        state["answer"] = answer
+        state.setdefault("conversation", []).append(answer)
+        return state
 
-          Surgeon's Query: What is the risk of infection post-appendectomy in a diabetic patient?
+    insights = state.get("insight_accumulator_response", "")
 
-          Response:  The risk of infection is moderately elevated in diabetic patients due to
-          impaired wound healing.   Prophylactic antibiotics are recommended, and close monitoring for
-          signs of infection in the first 72 hours is crucial.
+    if not str(insights).strip() or NO_EVIDENCE in str(insights):
+        answer = (
+            "I couldn't establish a sufficiently supported answer from the "
+            "available surgical evidence. Please consult an appropriately "
+            "qualified clinician for guidance."
+        )
+        state["answer"] = answer
+        state.setdefault("conversation", []).append(answer)
+        return state
 
-          **Response:**
-        """
-  prompt: str = instructions.format(
-    surgeon_query=surgeon_query,
-    insights=insights
-  )
-  response: BaseMessage = model.invoke(prompt)
-  state['conversation'].append(response.content)
-  state['answer'] = response.content
-  return state
+    instructions = """
+Answer the surgeon's question using ONLY the supplied retrieved insights.
+
+Question: {surgeon_query}
+
+Retrieved insights:
+{insights}
+
+Rules:
+- Do not invent facts or unsupported recommendations.
+- If the insights do not answer the question, say the available evidence
+  is insufficient.
+- Keep the answer under 50 words and two sentences.
+- This is educational decision support, not a replacement for clinical
+  judgment.
+"""
+
+    prompt = instructions.format(
+        surgeon_query=surgeon_query,
+        insights=insights,
+    )
+
+    response: BaseMessage = model.invoke(prompt)
+    answer = str(response.content).strip()
+
+    state.setdefault("conversation", []).append(answer)
+    state["answer"] = answer
+
+    return state

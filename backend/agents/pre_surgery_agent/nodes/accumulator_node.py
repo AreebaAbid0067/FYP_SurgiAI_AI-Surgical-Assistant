@@ -29,8 +29,6 @@ def accumulator_node(state: PreSurgeryState):
     anesthesia_consultant_report: str = state.get('anesthesia_consultant_report')
     emergency_protocol_advicer: str = state.get('emergency_protocol_advicer')
 
-    print(f'Emergency Protocol: {emergency_protocol_advicer[:50]}')
-
     instructions = """
         You are an AI tasked with generating a comprehensive and detailed surgical procedure report based on the inputs from multiple specialized nodes. Accumulate and synthesize the following information:
 

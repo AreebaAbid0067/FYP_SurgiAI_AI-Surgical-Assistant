@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { NO_FLASH_SCRIPT } from "./lib/settings";
 
 export const metadata: Metadata = {
-  title: "SurgiAI | Pre-surgery Planning",
+  title: "SurgiAI | Clinical Decision Support",
   description:
-    "A pre-surgery planning workflow that brings patient records into one structured report.",
+    "SurgiAI clinical decision support and clinician-led answer verification.",
 };
 
 export default function RootLayout({
@@ -13,7 +14,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: NO_FLASH_SCRIPT }} />
+      </head>
       <body>{children}</body>
     </html>
   );
