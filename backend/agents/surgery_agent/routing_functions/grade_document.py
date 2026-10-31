@@ -68,7 +68,7 @@ def grade_document(state: State):
             print(f"Relevance grading failed: {exc}")
             relevant = False
 
-    
+
     if not relevant and current_iteration < max_iteration:
         print("---DECISION: NOT RELEVANT -> rewrite query---")
         return "Rewrite"
@@ -79,4 +79,3 @@ def grade_document(state: State):
 
     print("---DECISION: relevant -> evidence synthesis---")
     return "Evidence Synthesis"
-

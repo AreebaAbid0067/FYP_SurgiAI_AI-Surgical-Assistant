@@ -1,5 +1,3 @@
-from functools import lru_cache
-
 from langgraph.graph.state import StateGraph, END, START
 from langgraph.prebuilt import ToolNode
 
@@ -15,9 +13,8 @@ from .nodes.rewrite_node import rewrite
 from .routing_functions.grade_document import grade_document
 
 from .tools.query_database import query_database
-from langchain_core.messages import ToolMessage
-from .tools.query_database import NO_EVIDENCE
 from state import State
+
 
 def no_evidence_node(state: State):
     """Return a safe response when retrieval evidence is insufficient."""
@@ -27,6 +24,7 @@ def no_evidence_node(state: State):
         "question related to surgical care."
     )
     return {"answer": answer}
+
 
 def _build_agent():
     builder = StateGraph(State)
@@ -51,14 +49,14 @@ def _build_agent():
     builder.add_edge("Complication Manager", "Expert Surgeon")
     builder.add_edge("Expert Surgeon", "Retriever")
     builder.add_conditional_edges(
-    "Retriever",
-    grade_document,
-    {
-        "Evidence Synthesis": "Evidence Synthesis",
-        "Rewrite": "Rewrite",
-        "No Evidence": "No Evidence",
-    },
-)
+        "Retriever",
+        grade_document,
+        {
+            "Evidence Synthesis": "Evidence Synthesis",
+            "Rewrite": "Rewrite",
+            "No Evidence": "No Evidence",
+        },
+    )
     builder.add_edge("Rewrite", "Expert Surgeon")
     builder.add_edge("Evidence Synthesis", "Insight Accumulator")
     builder.add_edge("Insight Accumulator", "Answer Generation")

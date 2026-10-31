@@ -23,6 +23,18 @@ class State(TypedDict):
   search_query: str
   retrieved_context: str
 
+class PostSurgeryState(TypedDict):
+  operation: str
+  patient_history: str
+  preop_summary: str
+  intraop_summary: str
+  current_status: str
+  reference_protocol: str
+  medication_plan: str
+  care_plan: str
+  monitoring_plan: str
+  postop_plan: str
+
 class PreSurgeryState(TypedDict):
   patient_history: str
   operation: str

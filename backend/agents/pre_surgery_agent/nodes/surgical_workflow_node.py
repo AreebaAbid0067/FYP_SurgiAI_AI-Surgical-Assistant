@@ -9,8 +9,9 @@ from state import PreSurgeryState
 load_dotenv()
 
 model = ChatGroq(
-    model="openai/gpt-oss-20b",
+    model="qwen/qwen3.8-27b",
     temperature=0.5,
+    max_tokens=768,
     api_key=os.getenv("GROQ_API_KEY")
 )
 
@@ -79,4 +80,3 @@ def surgical_workflow_node(state: PreSurgeryState):
     response: BaseMessage = model.invoke(prompt)
     state["surgical_workflow_report"] = response.content
     return state
-

@@ -4,3 +4,6 @@ __pycache__/
 *.pyc
 uploads/*
 !uploads/.gitkeep
+clinical_verification.sqlite3
+surgiai_app.sqlite3
+.secrets.json

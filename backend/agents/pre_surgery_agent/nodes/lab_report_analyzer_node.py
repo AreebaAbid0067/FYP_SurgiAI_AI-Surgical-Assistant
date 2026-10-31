@@ -9,8 +9,9 @@ from state import PreSurgeryState
 load_dotenv()
 
 model = ChatGroq(
-    model="openai/gpt-oss-20b",
+    model="qwen/qwen3.8-27b",
     temperature=0.5,
+    max_tokens=768,
     api_key=os.getenv("GROQ_API_KEY")
 )
 
@@ -64,7 +65,7 @@ def lab_report_analyzer_node(state: PreSurgeryState):
         * Your interpretation of the results, relating them to the planned operation and patient history.
         * The potential influence on surgical planning, risk assessment, or postoperative considerations.  For example:
 
-        * **Insight 1:** Elevated creatinine levels (2.1 mg/dL) suggest reduced renal function. The patientâ€™s history of 
+        * **Insight 1:** Elevated creatinine levels (2.1 mg/dL) suggest reduced renal function. The patient’s history of 
         hypertension compounds this concern.  Careful hydration and monitoring of renal function post-operation will be necessary.
         * **Insight 2:**  Normal coagulation profile (INR 1.0) indicates no contraindication for the planned surgery.  
         Routine pre-operative evaluation for blood loss mitigation is advised.
@@ -79,4 +80,3 @@ def lab_report_analyzer_node(state: PreSurgeryState):
     response: BaseMessage = model.invoke(prompt)
     state['lab_report_analyzer_node'] = response.content
     return state
-

@@ -9,8 +9,9 @@ from state import PreSurgeryState
 load_dotenv()
 
 model = ChatGroq(
-    model="openai/gpt-oss-20b",
+    model="qwen/qwen3.8-27b",
     temperature=0.5,
+    max_tokens=768,
     api_key=os.getenv("GROQ_API_KEY")
 )
 
@@ -44,7 +45,7 @@ def surgical_risk_analyzer_node(state: PreSurgeryState):
 
         **1. Patient History Summary:** The patient's history of diabetes increases the risk of wound infections and delayed healing.  Their history of hypertension necessitates careful monitoring of blood pressure during and after surgery.
         **2. Procedure-Specific Risks:**  The risk of bleeding, infection, and nerve damage are potential complications associated with the operation itself.
-        **3. Combined Risk Assessment:** The patientâ€™s diabetes increases the likelihood of infection. Hypertension could increase the risk of bleeding due to issues in blood pressure control.
+        **3. Combined Risk Assessment:** The patient’s diabetes increases the likelihood of infection. Hypertension could increase the risk of bleeding due to issues in blood pressure control.
         **4. Risk Mitigation Strategies:**  Prophylactic antibiotics are recommended for the patient due to diabetes to reduce the risk of infection. Close blood pressure monitoring should be done to manage hypertension.
         **5. Overall Risk Profile:** The overall risk profile for the patient is moderate.  The combination of the procedure's inherent risks and the patient's pre-existing conditions necessitates close monitoring and proactive risk mitigation strategies.
 
@@ -58,4 +59,3 @@ def surgical_risk_analyzer_node(state: PreSurgeryState):
     response: BaseMessage = model.invoke(prompt)
     state["risk_analyzer_report"] = response.content
     return state
-

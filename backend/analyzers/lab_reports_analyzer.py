@@ -29,7 +29,8 @@ def lab_reports_analyzer(image_path):
                 ],
             }
         ],
-        model="llama-3.2-11b-vision-preview",
+        model="qwen/qwen3.8-27b",
+        max_tokens=768,
     )
 
     return chat_completion.choices[0].message.content

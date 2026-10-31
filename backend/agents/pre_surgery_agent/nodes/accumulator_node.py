@@ -9,8 +9,9 @@ from state import PreSurgeryState
 load_dotenv()
 
 model = ChatGroq(
-    model="openai/gpt-oss-20b",
+    model="qwen/qwen3.8-27b",
     temperature=0.5,
+    max_tokens=768,
     api_key=os.getenv("GROQ_API_KEY")
 )
 
@@ -27,8 +28,6 @@ def accumulator_node(state: PreSurgeryState):
     risk_analyzer_report: str = state.get('risk_analyzer_report')
     anesthesia_consultant_report: str = state.get('anesthesia_consultant_report')
     emergency_protocol_advicer: str = state.get('emergency_protocol_advicer')
-
-    print(f'Emergency Protocol: {emergency_protocol_advicer[:50]}')
 
     instructions = """
         You are an AI tasked with generating a comprehensive and detailed surgical procedure report based on the inputs from multiple specialized nodes. Accumulate and synthesize the following information:
@@ -65,4 +64,3 @@ def accumulator_node(state: PreSurgeryState):
     response: BaseMessage = model.invoke(prompt)
     state["accumulator"] = response.content
     return state
-
