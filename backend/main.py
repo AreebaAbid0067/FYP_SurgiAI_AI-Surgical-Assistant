@@ -63,7 +63,7 @@ async def surgical_query(input: DuringSurgery):
     return response
 
 @app.post("/post-surgery")
-async def postoperative_query(input: PostSurgery):
+def postoperative_query(input: PostSurgery):
     try:
         answer = post_surgery_agent(
             procedure=input.procedure,
