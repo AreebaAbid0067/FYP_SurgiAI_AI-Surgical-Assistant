@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 import nfr
 import post_surgery_service
 import procedures
+import fitz
 import security
 import store
 import verification
@@ -309,16 +310,80 @@ def _read_image(upload: UploadFile | None, label: str) -> bytes | None:
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"{label} is not a valid image.") from exc
     return content
+def _read_medical_files(
+    uploads: list[UploadFile] | None,
+    label: str,
+) -> list[bytes]:
+    images = []
 
+    for upload in uploads or []:
+        if not upload.filename:
+            continue
+
+        content = upload.file.read(MAX_UPLOAD_BYTES + 1)
+
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"{upload.filename} is larger than 10 MB."
+            )
+
+        if upload.content_type == "application/pdf":
+            try:
+                pdf = fitz.open(stream=content, filetype="pdf")
+
+                if len(pdf) > 10:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"{upload.filename} has more than 10 pages."
+                    )
+
+                for page in pdf:
+                    pixmap = page.get_pixmap(
+                        matrix=fitz.Matrix(1.5, 1.5),
+                        alpha=False
+                    )
+                    image = Image.open(
+                        io.BytesIO(pixmap.tobytes("png"))
+                    ).convert("RGB")
+
+                    output = io.BytesIO()
+                    image.save(output, format="JPEG")
+                    images.append(output.getvalue())
+
+                pdf.close()
+
+            except HTTPException:
+                raise
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{upload.filename} is not a valid PDF."
+                ) from exc
+
+        else:
+            try:
+                image = Image.open(io.BytesIO(content)).convert("RGB")
+                output = io.BytesIO()
+                image.save(output, format="JPEG")
+                images.append(output.getvalue())
+
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{upload.filename} is not a valid image."
+                ) from exc
+
+    return images
 
 @app.post("/pre-surgery/upload")
 def upload_files(
     operation: str = Form(..., max_length=160),
     patient_history: str = Form("", max_length=20000),
     case_id: str | None = Form(None),
-    prescription: UploadFile | None = File(None),
-    scan: UploadFile | None = File(None),
-    lab_report: UploadFile | None = File(None),
+    prescription: list[UploadFile] | None = File(default=None),
+    scan: list[UploadFile] | None = File(default=None),
+    lab_report: list[UploadFile] | None = File(default=None),
     user: dict = Depends(require_surgeon),
 ):
     rate_limit(f"ai:{user['user_id']}", limit=20)
@@ -330,11 +395,19 @@ def upload_files(
     from analyzers.prescription_analyzer import prescription_analyzer
     from analyzers.scans_analyzer import scans_analyzer
     from agents.pre_surgery_agent.surgical_procedure_agent import pre_surgical_report_agent
-
     files = {
-        "prescription": (_read_image(prescription, "Prescription"), prescription_analyzer),
-        "scan": (_read_image(scan, "Scan"), scans_analyzer),
-        "lab_report": (_read_image(lab_report, "Lab report"), lab_reports_analyzer),
+        "prescription": (
+            _read_medical_files(prescription, "Prescription"),
+            prescription_analyzer,
+        ),
+        "scan": (
+            _read_medical_files(scan, "Scan"),
+            scans_analyzer,
+        ),
+        "lab_report": (
+            _read_medical_files(lab_report, "Lab report"),
+            lab_reports_analyzer,
+        ),
     }
     not_provided = "Not provided by the surgeon."
 
@@ -342,13 +415,23 @@ def upload_files(
         # Files live only in a private temp folder that is deleted afterwards.
         with tempfile.TemporaryDirectory() as workdir:
             def analyse(item):
-                name, (content, analyzer) = item
-                if content is None:
-                    return name, not_provided
-                path = Path(workdir) / f"{name}.jpg"
-                path.write_bytes(content)
-                return name, analyzer(str(path))
+                name, (contents, analyzer) = item
 
+                if not contents:
+                    return name, not_provided
+
+                results = []
+
+                for index, content in enumerate(contents):
+                    path = Path(workdir) / f"{name}_{index}.jpg"
+                    path.write_bytes(content)
+
+                    result = analyzer(str(path))
+                    results.append(
+                        f"Document {index + 1}:\n{result}"
+                    )
+
+                return name, "\n\n".join(results)
             with ThreadPoolExecutor(max_workers=3) as pool:
                 reports = dict(pool.map(analyse, files.items()))
 
