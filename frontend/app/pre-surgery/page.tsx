@@ -18,7 +18,7 @@ export default function PreSurgeryPage() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [intake, setIntake] = useState<Intake>(emptyIntake());
   const [notes, setNotes] = useState("");
-  const [files, setFiles] = useState<Record<string, File | null>>({});
+  const [files, setFiles] = useState<Record<string, File[]>>({});
   const [caseId, setCaseId] = useState("");
   const [report, setReport] = useState("");
   const [busy, setBusy] = useState("");
@@ -42,30 +42,67 @@ export default function PreSurgeryPage() {
   }, [intake.symptoms]);
 
   const set = <K extends keyof Intake>(key: K, value: Intake[K]) => setIntake((prev) => ({ ...prev, [key]: value }));
+  const readDocument = async (selectedFiles: File[]) => {
+  if (!selectedFiles.length) return;
 
-  const readDocument = async (file: File) => {
-    setBusy("Reading document…"); setError(""); setInfo("");
-    const form = new FormData();
-    form.append("document", file);
-    try {
-      const data = await api<Partial<Intake> & { other?: string }>("pre-surgery/history-from-document", { method: "POST", body: form });
-      setIntake((prev) => ({
-        ...prev,
-        age: data.age || prev.age,
-        sex: data.sex || prev.sex,
-        symptoms: Array.from(new Set([...prev.symptoms, ...(data.symptoms ?? [])])),
-        comorbidities: Array.from(new Set([...prev.comorbidities, ...(data.comorbidities ?? [])])),
-        allergies: Array.from(new Set([...prev.allergies, ...(data.allergies ?? [])])),
-        medications: Array.from(new Set([...prev.medications, ...(data.medications ?? [])])),
-      }));
-      if (data.other) setNotes((n) => (n ? `${n}\n${data.other}` : data.other ?? ""));
-      setInfo("History pre-filled from the document. Please review every field before continuing.");
-    } catch (e) {
-      setError((e as ApiError).message);
-    } finally {
-      setBusy("");
+  setBusy(`Reading ${selectedFiles.length} document(s)…`);
+  setError("");
+  setInfo("");
+
+  const extracted: (Partial<Intake> & { other?: string })[] = [];
+
+  try {
+    for (const file of selectedFiles) {
+      const form = new FormData();
+      form.append("document", file);
+
+      const data = await api<Partial<Intake> & { other?: string }>(
+        "pre-surgery/history-from-document",
+        { method: "POST", body: form }
+      );
+
+      extracted.push(data);
     }
-  };
+
+    setIntake((prev) => ({
+      ...prev,
+      age: extracted.find((d) => d.age)?.age || prev.age,
+      sex: extracted.find((d) => d.sex)?.sex || prev.sex,
+      symptoms: Array.from(new Set([
+        ...prev.symptoms,
+        ...extracted.flatMap((d) => d.symptoms ?? [])
+      ])),
+      comorbidities: Array.from(new Set([
+        ...prev.comorbidities,
+        ...extracted.flatMap((d) => d.comorbidities ?? [])
+      ])),
+      allergies: Array.from(new Set([
+        ...prev.allergies,
+        ...extracted.flatMap((d) => d.allergies ?? [])
+      ])),
+      medications: Array.from(new Set([
+        ...prev.medications,
+        ...extracted.flatMap((d) => d.medications ?? [])
+      ])),
+    }));
+
+    const otherNotes = extracted
+      .map((d) => d.other)
+      .filter(Boolean)
+      .join("\n");
+
+    if (otherNotes) {
+      setNotes((n) => n ? `${n}\n${otherNotes}` : otherNotes);
+    }
+
+    setInfo("History pre-filled from all documents. Please review every field before continuing.");
+
+  } catch (e) {
+    setError((e as ApiError).message);
+  } finally {
+    setBusy("");
+  }
+};
 
   const generate = async () => {
     setBusy("Preparing the pre-operative report…"); setError("");
@@ -81,7 +118,11 @@ export default function PreSurgeryPage() {
       const form = new FormData();
       form.append("operation", procedureName);
       form.append("case_id", id);
-      for (const [key, file] of Object.entries(files)) if (file) form.append(key, file);
+      for (const [key, selectedFiles] of Object.entries(files)) {
+        for (const file of selectedFiles) {
+          form.append(key, file);
+        }
+      }
       const result = await api<unknown>("pre-surgery/upload", { method: "POST", body: form });
       setReport(typeof result === "string" ? result : JSON.stringify(result, null, 2));
       setStep(3);
@@ -141,7 +182,17 @@ export default function PreSurgeryPage() {
             <Card title="Quick start" subtitle="Have a referral or history sheet? Upload it and we will fill the form for you.">
               <label className="btn btn-ghost cursor-pointer">
                 <LuFileUp /> Upload document (photo, PDF or text)
-                <input type="file" hidden accept="image/*,application/pdf,text/plain" onChange={(e) => e.target.files?.[0] && readDocument(e.target.files[0])} />
+                <input
+                type="file"
+                hidden
+                multiple
+                accept="image/*,application/pdf,text/plain"
+                onChange={(e) => {
+                  const selected = Array.from(e.target.files ?? []);
+                  if (selected.length) readDocument(selected);
+                  e.target.value = "";
+                  }}
+                  />
               </label>
             </Card>
             <Card title="Patient basics">
@@ -183,7 +234,81 @@ export default function PreSurgeryPage() {
           <Card title="Records (optional)" subtitle="Add images of the prescription, scan or lab report if available.">
             {([["prescription", "Prescription"], ["scan", "Scan"], ["lab_report", "Lab report"]] as const).map(([key, title]) => (
               <Field key={key} label={title}>
-                <input type="file" accept="image/*" className="upload-input" onChange={(e) => setFiles((f) => ({ ...f, [key]: e.target.files?.[0] ?? null }))} />
+   <div className="space-y-3">
+  {files[key]?.length > 0 && (
+    <div className="space-y-2">
+      {files[key].map((file, index) => (
+        <div
+          key={`${file.name}-${index}`}
+          className="flex items-center justify-between gap-3 rounded-lg border p-3"
+        >
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{file.name}</p>
+            <p className="text-xs text-gray-500">
+              {(file.size / 1024).toFixed(1)} KB
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="text-sm text-red-500"
+            onClick={() =>
+              setFiles((f) => ({
+                ...f,
+                [key]: f[key].filter((_, i) => i !== index),
+              }))
+            }
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+    </div>
+  )}
+  {files[key]?.length === 0 || !files[key] ? (
+  <label className="btn btn-ghost cursor-pointer inline-flex">
+    Add File
+    <input
+      type="file"
+      hidden
+      accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+      onChange={(e) => {
+        const selected = Array.from(e.target.files ?? []);
+
+        if (selected.length) {
+          setFiles((f) => ({
+            ...f,
+            [key]: [...(f[key] ?? []), ...selected],
+          }));
+        }
+
+        e.target.value = "";
+      }}
+    />
+  </label>
+) : (
+  <label className="btn btn-ghost cursor-pointer inline-flex">
+    + Add Another File
+    <input
+      type="file"
+      hidden
+      accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+      onChange={(e) => {
+        const selected = Array.from(e.target.files ?? []);
+
+        if (selected.length) {
+          setFiles((f) => ({
+            ...f,
+            [key]: [...(f[key] ?? []), ...selected],
+          }));
+        }
+
+        e.target.value = "";
+      }}
+    />
+  </label>
+)}
+</div>
               </Field>
             ))}
             <div className="flex items-center gap-2">
